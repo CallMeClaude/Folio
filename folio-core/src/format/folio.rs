@@ -3,7 +3,7 @@
 ///   assets/         — embedded images (UUID filename, original extension)
 ///
 /// This is structurally identical to how .pages works.
-use std::io::{Read, Write, Seek};
+use std::io::{Read, Write};
 use std::path::Path;
 use anyhow::{Context, Result};
 use uuid::Uuid;

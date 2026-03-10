@@ -5,7 +5,6 @@
 /// CRDT operation and is what the UI reads from.
 use anyhow::Result;
 use loro::{LoroDoc, UndoManager};
-use crate::document::Document;
 
 pub struct CrdtEngine {
     pub doc:  LoroDoc,

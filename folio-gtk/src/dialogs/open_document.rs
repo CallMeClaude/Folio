@@ -1,5 +1,3 @@
-use gtk4::prelude::*;
-use libadwaita::prelude::*;
 use libadwaita::{Application, ApplicationWindow};
 
 /// Show the file-open dialog.

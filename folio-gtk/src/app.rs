@@ -1,5 +1,4 @@
 use gtk4::prelude::*;
-use libadwaita::prelude::*;
 use libadwaita::Application;
 
 const APP_ID: &str = "org.folio.Folio";
