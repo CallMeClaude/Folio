@@ -1,0 +1,12 @@
+/home/claude/Folio/target/debug/deps/loro_common-c7a6b4cc7ed11d43.d: /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/lib.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/error.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/id.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/internal_string.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/logging.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/macros.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/span.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/value.rs
+
+/home/claude/Folio/target/debug/deps/libloro_common-c7a6b4cc7ed11d43.rmeta: /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/lib.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/error.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/id.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/internal_string.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/logging.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/macros.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/span.rs /home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/value.rs
+
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/lib.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/error.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/id.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/internal_string.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/logging.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/macros.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/span.rs:
+/home/claude/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/loro-common-1.10.0/src/value.rs:
