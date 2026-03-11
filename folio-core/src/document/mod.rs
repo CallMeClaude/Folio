@@ -1,8 +1,12 @@
 pub mod block;
 pub mod page;
+pub mod position;
+pub mod ops;
 
 pub use block::{Block, BlockKind, BlockLayout, Alignment, InlineRun, InlineAttr};
 pub use page::{PaperSize, Margins, PageSettings, Orientation};
+pub use position::{DocPosition, DocRange};
+pub use ops::EditError;
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -44,8 +48,8 @@ impl Document {
 /// Document-wide typography defaults (can be overridden per-block).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TypographySettings {
-    /// Font family name as a CSS-like string, e.g. "Lora".
-    pub font_family: String,
+    /// Font family name, e.g. "Lora".
+    pub font_family:  String,
     /// Base font size in points.
     pub font_size_pt: f64,
     /// Line height multiplier.

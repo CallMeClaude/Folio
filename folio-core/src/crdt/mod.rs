@@ -1,43 +1,82 @@
-/// CRDT layer — wraps `loro` for undo/redo and document state tracking.
+/// CRDT / undo-redo layer.
 ///
-/// The loro `LoroDoc` is the source of truth. The `Document` struct in
-/// `document/mod.rs` is a derived view that gets rebuilt after every
-/// CRDT operation and is what the UI reads from.
-use anyhow::Result;
-use loro::{LoroDoc, UndoManager};
+/// Phase 1 uses a shallow checkpoint model:
+///   - `Vec<Block>` inside `Document` is the authoritative live state.
+///   - Before each edit, the canvas calls `checkpoint(&doc)`.
+///   - `undo()` restores the previous snapshot; `redo()` re-applies.
+///
+/// Public API:
+///   engine.checkpoint(&doc)
+///   engine.undo(&current_doc) -> Option<Document>
+///   engine.redo(&current_doc) -> Option<Document>
+///   engine.can_undo() -> bool
+///   engine.can_redo() -> bool
+///   engine.clear()
+
+use crate::document::Document;
+
+const MAX_HISTORY: usize = 200;
 
 pub struct CrdtEngine {
-    pub doc:  LoroDoc,
-    pub undo: UndoManager,
+    undo_stack: Vec<Snapshot>,
+    redo_stack: Vec<Snapshot>,
+}
+
+#[derive(Clone)]
+struct Snapshot {
+    json: String,
+}
+
+impl Snapshot {
+    fn capture(doc: &Document) -> Self {
+        Snapshot {
+            json: serde_json::to_string(doc).unwrap_or_default(),
+        }
+    }
+
+    fn restore(&self) -> Option<Document> {
+        serde_json::from_str(&self.json).ok()
+    }
 }
 
 impl CrdtEngine {
-    /// Create a new engine from an empty document.
     pub fn new() -> Self {
-        let doc  = LoroDoc::new();
-        let undo = UndoManager::new(&doc);
-        CrdtEngine { doc, undo }
+        CrdtEngine {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+        }
     }
 
-    /// Undo the last operation. Returns true if something was undone.
-    pub fn undo(&mut self) -> Result<bool> {
-        Ok(self.undo.undo().is_ok())
+    /// Save state before an edit. Clears the redo stack.
+    pub fn checkpoint(&mut self, doc: &Document) {
+        self.redo_stack.clear();
+        self.undo_stack.push(Snapshot::capture(doc));
+        if self.undo_stack.len() > MAX_HISTORY {
+            self.undo_stack.remove(0);
+        }
     }
 
-    /// Redo the last undone operation. Returns true if something was redone.
-    pub fn redo(&mut self) -> Result<bool> {
-        Ok(self.undo.redo().is_ok())
+    /// Undo: restore previous state; push current onto redo stack.
+    pub fn undo(&mut self, current: &Document) -> Option<Document> {
+        let snap = self.undo_stack.pop()?;
+        self.redo_stack.push(Snapshot::capture(current));
+        snap.restore()
     }
 
-    /// Export a snapshot of the loro doc as bytes (for autosave).
-    pub fn snapshot(&self) -> Vec<u8> {
-        self.doc.export(loro::ExportMode::Snapshot).unwrap_or_default()
+    /// Redo: re-apply next state; push current onto undo stack.
+    pub fn redo(&mut self, current: &Document) -> Option<Document> {
+        let snap = self.redo_stack.pop()?;
+        self.undo_stack.push(Snapshot::capture(current));
+        snap.restore()
     }
 
-    /// Import a snapshot produced by `snapshot()`.
-    pub fn load_snapshot(&mut self, data: &[u8]) -> Result<()> {
-        self.doc.import(data)?;
-        Ok(())
+    pub fn can_undo(&self) -> bool { !self.undo_stack.is_empty() }
+    pub fn can_redo(&self) -> bool { !self.redo_stack.is_empty() }
+
+    /// Drop all history (call after loading a file).
+    pub fn clear(&mut self) {
+        self.undo_stack.clear();
+        self.redo_stack.clear();
     }
 }
 
