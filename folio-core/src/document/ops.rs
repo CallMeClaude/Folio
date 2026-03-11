@@ -81,7 +81,7 @@ fn insert_into_runs(runs: &mut Vec<InlineRun>, byte_offset: usize, text: &str) {
             let local = byte_offset - cursor;
             let before = runs[i].text[..local].to_string();
             let after  = runs[i].text[local..].to_string();
-            let attrs  = runs[i].attrs.clone();
+            let _attrs = runs[i].attrs.clone();
 
             // Build replacement: before + new + after, same attrs.
             let mut new_text = before;
