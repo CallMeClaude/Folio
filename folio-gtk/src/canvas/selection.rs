@@ -2,7 +2,7 @@
 
 use folio_core::{DocPosition, DocRange};
 use cairo::Context;
-use crate::canvas::layout::{CachedBlock, CONTENT_X};
+use crate::canvas::layout::CachedBlock;
 
 #[derive(Debug, Clone)]
 pub struct SelectionState {
@@ -38,6 +38,7 @@ pub fn paint_selection_for_block(
     block_idx: usize,
     sel:       &DocRange,
     cb:        &CachedBlock,
+    content_x: f64,
 ) {
     if block_idx < sel.start.block_idx || block_idx > sel.end.block_idx {
         return;
@@ -76,8 +77,8 @@ pub fn paint_selection_for_block(
             let line_y = cb.y_top + y0_pu as f64 / ps;
             let line_h = (y1_pu - y0_pu) as f64 / ps;
 
-            let x0 = CONTENT_X + x0_pu as f64 / ps;
-            let x1 = CONTENT_X + x1_pu as f64 / ps;
+            let x0 = content_x + x0_pu as f64 / ps;
+            let x1 = content_x + x1_pu as f64 / ps;
             let w  = (x1 - x0).abs().max(1.0);
             cr.rectangle(x0.min(x1), line_y, w, line_h);
         }

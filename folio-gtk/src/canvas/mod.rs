@@ -65,11 +65,6 @@ impl EditorState {
             self.pending_attrs.push(attr);
         }
     }
-
-    /// True if `attr` is in the pending set.
-    pub fn has_pending_attr(&self, attr: &InlineAttr) -> bool {
-        self.pending_attrs.contains(attr)
-    }
 }
 
 pub struct EditorCanvas {
@@ -89,7 +84,7 @@ impl EditorCanvas {
         // ── Draw ───────────────────────────────────────────────────────────
         {
             let s = state.clone();
-            da.set_draw_func(move |_, cr, _, _| render::draw(cr, &s.borrow()));
+            da.set_draw_func(move |widget, cr, _, _| render::draw(widget, cr, &s.borrow()));
         }
 
         // ── Keyboard ──────────────────────────────────────────────────────
