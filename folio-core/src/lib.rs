@@ -6,6 +6,7 @@ pub mod crdt;
 pub mod format;
 pub mod export;
 pub mod stats;
+pub mod search;
 
 pub use document::{
     Document, Block, BlockKind, BlockLayout, Alignment,
@@ -17,3 +18,4 @@ pub use document::{
 };
 pub use crdt::CrdtEngine;
 pub use format::{save_folio, load_folio, read_folio_metadata};
+pub use search::{SearchQuery, SearchMatch, find_all, find_next, find_prev, replace_match, replace_all};

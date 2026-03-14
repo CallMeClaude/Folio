@@ -81,6 +81,9 @@ impl EditorCanvas {
         da.set_focusable(true);
         da.set_can_focus(true);
 
+        // Store state ref in widget data so input.rs can open dialogs.
+        unsafe { da.set_data("editor_state", state.clone()); }
+
         // ── Draw ───────────────────────────────────────────────────────────
         {
             let s = state.clone();

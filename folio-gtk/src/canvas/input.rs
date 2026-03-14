@@ -18,6 +18,7 @@ pub fn handle_key(
         gdk::Key::z | gdk::Key::Z if ctrl &&  shift => redo(s),
         gdk::Key::y | gdk::Key::Y if ctrl           => redo(s),
         gdk::Key::s | gdk::Key::S if ctrl           => { save(s); false }
+        gdk::Key::f | gdk::Key::F if ctrl           => { open_find(da); false }
         gdk::Key::BackSpace                          => backspace(s),
         gdk::Key::Return | gdk::Key::KP_Enter        => enter(s),
         gdk::Key::Left  if shift => extend_selection(s, -1, false),
@@ -80,6 +81,20 @@ fn save(s: &mut EditorState) {
         match folio_core::format::save_folio(&path, &s.doc, &s.engine, &[]) {
             Ok(_)  => s.dirty = false,
             Err(e) => eprintln!("Save failed: {e}"),
+        }
+    }
+}
+
+// ── Find ──────────────────────────────────────────────────────────────────────
+
+fn open_find(da: &DrawingArea) {
+    if let Some(root) = da.root().and_then(|r| r.downcast::<gtk4::Window>().ok()) {
+        let state_opt = unsafe {
+            da.data::<std::rc::Rc<std::cell::RefCell<EditorState>>>("editor_state")
+                .map(|p| p.as_ref().clone())
+        };
+        if let Some(state) = state_opt {
+            crate::dialogs::find_replace::show(&root, state, da.clone());
         }
     }
 }
