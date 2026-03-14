@@ -24,10 +24,10 @@ pub fn handle_key(
         gdk::Key::Right if shift => extend_selection(s,  1, false),
         gdk::Key::Up    if shift => extend_selection(s, -1, true),
         gdk::Key::Down  if shift => extend_selection(s,  1, true),
-        gdk::Key::Left  => { s.selection = None; move_cursor(s, -1) }
-        gdk::Key::Right => { s.selection = None; move_cursor(s,  1) }
-        gdk::Key::Up    => { s.selection = None; move_cursor_vertical(s, -1) }
-        gdk::Key::Down  => { s.selection = None; move_cursor_vertical(s,  1) }
+        gdk::Key::Left  => { s.selection = None; s.pending_attrs.clear(); move_cursor(s, -1) }
+        gdk::Key::Right => { s.selection = None; s.pending_attrs.clear(); move_cursor(s,  1) }
+        gdk::Key::Up    => { s.selection = None; s.pending_attrs.clear(); move_cursor_vertical(s, -1) }
+        gdk::Key::Down  => { s.selection = None; s.pending_attrs.clear(); move_cursor_vertical(s,  1) }
         gdk::Key::Home  => {
             s.selection = None;
             s.cursor.byte_offset = 0;
@@ -92,7 +92,17 @@ fn type_char(s: &mut EditorState, ch: char) {
     checkpoint(s);
     let pos = s.cursor;
     s.doc.insert_text(pos, &text).ok();
-    s.cursor.byte_offset += ch.len_utf8();
+    let end_offset = pos.byte_offset + ch.len_utf8();
+
+    // Apply any pending formatting to the just-inserted character.
+    if !s.pending_attrs.is_empty() {
+        let range = folio_core::DocRange::new(pos, DocPosition::new(pos.block_idx, end_offset));
+        for attr in s.pending_attrs.clone() {
+            s.doc.apply_inline_attr(range, attr).ok();
+        }
+    }
+
+    s.cursor.byte_offset = end_offset;
     s.selection = None;
     s.invalidate_layout();
     s.dirty = true;

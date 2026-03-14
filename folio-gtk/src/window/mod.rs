@@ -77,7 +77,12 @@ impl DocumentWindow {
         tv.set_content(Some(&split));
 
         window.set_content(Some(&tv));
-        canvas.widget.grab_focus();
+
+        // Grab keyboard focus after the window is actually shown/mapped.
+        {
+            let c = canvas.widget.clone();
+            window.connect_show(move |_| { c.grab_focus(); });
+        }
 
         DocumentWindow { window }
     }

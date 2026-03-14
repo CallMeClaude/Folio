@@ -40,7 +40,9 @@ impl FormatPanel {
             spin.set_value(cur_size);
             let c = canvas.clone();
             spin.connect_value_changed(move |sp| {
-                s.borrow_mut().doc.typography.font_size_pt = sp.value();
+                let mut st = s.borrow_mut();
+                st.doc.typography.font_size_pt = sp.value();
+                st.invalidate_layout();
                 c.queue_draw();
             });
         }
@@ -56,7 +58,9 @@ impl FormatPanel {
             let s = state.clone();
             let c = canvas.clone();
             lh_spin.connect_value_changed(move |sp| {
-                s.borrow_mut().doc.typography.line_height = sp.value();
+                let mut st = s.borrow_mut();
+                st.doc.typography.line_height = sp.value();
+                st.invalidate_layout();
                 c.queue_draw();
             });
         }

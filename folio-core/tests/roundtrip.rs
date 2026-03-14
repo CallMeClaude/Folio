@@ -1,6 +1,6 @@
 use folio_core::{
     Document, Block, BlockKind, PageSettings,
-    InlineRun, InlineAttr,
+    InlineRun, InlineAttr, CrdtEngine,
 };
 use folio_core::format::{save_folio, load_folio};
 use folio_core::format::json::{to_json, from_json};
@@ -56,10 +56,14 @@ fn folio_file_roundtrip() {
     let dir      = tempfile::tempdir().unwrap();
     let path     = dir.path().join("test.folio");
 
-    save_folio(&path, &original, &[]).unwrap();
+    // Build engine + initial checkpoint so content.loro is valid.
+    let mut engine = CrdtEngine::new();
+    engine.checkpoint(&original).unwrap();
+
+    save_folio(&path, &original, &engine, &[]).unwrap();
     assert!(path.exists());
 
-    let (restored, assets) = load_folio(&path).unwrap();
+    let (mut restored_engine, restored, assets) = load_folio(&path).unwrap();
     assert!(assets.is_empty());
     assert_eq!(original.id,    restored.id);
     assert_eq!(original.title, restored.title);
@@ -70,4 +74,7 @@ fn folio_file_roundtrip() {
         assert_eq!(a.kind,    b.kind);
         assert_eq!(a.content, b.content);
     }
+
+    // Verify undo/redo history was cleared on load.
+    assert!(!restored_engine.can_undo());
 }

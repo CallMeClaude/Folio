@@ -83,22 +83,23 @@ impl LayoutCache {
 // ── Block layout helper ───────────────────────────────────────────────────────
 
 pub fn make_block_layout(
-    pctx:     &pango::Context,
+    pctx:      &pango::Context,
     base_font: &pango::FontDescription,
-    block:    &folio_core::Block,
-    width_pu: i32,
-    doc:      &Document,
+    block:     &folio_core::Block,
+    width_pu:  i32,
+    doc:       &Document,
 ) -> pango::Layout {
     let layout = pango::Layout::new(pctx);
 
-    // Override font for heading styles.
+    // Per-kind font overrides.
     let mut font = base_font.clone();
     match &block.kind {
-        BlockKind::Title    => { font.set_size((doc.typography.font_size_pt * 2.2 * pango::SCALE as f64) as i32); font.set_weight(pango::Weight::Bold); }
-        BlockKind::Heading1 => { font.set_size((doc.typography.font_size_pt * 1.6 * pango::SCALE as f64) as i32); font.set_weight(pango::Weight::Semibold); }
+        BlockKind::Title    => { font.set_size((doc.typography.font_size_pt * 2.2  * pango::SCALE as f64) as i32); font.set_weight(pango::Weight::Bold); }
+        BlockKind::Heading1 => { font.set_size((doc.typography.font_size_pt * 1.6  * pango::SCALE as f64) as i32); font.set_weight(pango::Weight::Semibold); }
         BlockKind::Heading2 => { font.set_size((doc.typography.font_size_pt * 1.25 * pango::SCALE as f64) as i32); font.set_weight(pango::Weight::Semibold); }
-        BlockKind::Caption  => { font.set_size((doc.typography.font_size_pt * 0.85 * pango::SCALE as f64) as i32); }
-        BlockKind::Code     => { font = pango::FontDescription::from_string(&format!("IBM Plex Mono {:.1}", doc.typography.font_size_pt)); }
+        BlockKind::Caption  => { font.set_size((doc.typography.font_size_pt * 0.85 * pango::SCALE as f64) as i32); font.set_style(pango::Style::Italic); }
+        BlockKind::Quote    => { font.set_style(pango::Style::Italic); }
+        BlockKind::Code     => { font = pango::FontDescription::from_string(&format!("IBM Plex Mono {:.1}", doc.typography.font_size_pt * 0.9)); }
         _ => {}
     }
 
@@ -106,7 +107,19 @@ pub fn make_block_layout(
     layout.set_width(width_pu);
     layout.set_wrap(pango::WrapMode::WordChar);
 
-    // Build attributed text from inline runs.
+    // Apply pango alignment from block layout settings.
+    let pango_align = match block.layout.alignment {
+        folio_core::Alignment::Left      => pango::Alignment::Left,
+        folio_core::Alignment::Center    => pango::Alignment::Center,
+        folio_core::Alignment::Right     => pango::Alignment::Right,
+        folio_core::Alignment::Justified => { layout.set_justify(true); pango::Alignment::Left }
+    };
+    layout.set_alignment(pango_align);
+
+    // Set line spacing from document typography.
+    let spacing_pu = ((doc.typography.line_height - 1.0) * doc.typography.font_size_pt * pango::SCALE as f64) as i32;
+    layout.set_spacing(spacing_pu.max(0));
+
     let plain: String = block.content.iter().map(|r| r.text.as_str()).collect();
     layout.set_text(&plain);
 

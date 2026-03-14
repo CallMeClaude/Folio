@@ -74,6 +74,7 @@ impl LaunchWindow {
         let list = ListBox::new();
         list.add_css_class("navigation-sidebar");
         list.set_selection_mode(gtk4::SelectionMode::Single);
+        list.set_activate_on_single_click(true);
         list.set_margin_start(16);
         list.set_margin_end(16);
         list.set_margin_top(8);
@@ -118,7 +119,7 @@ impl LaunchWindow {
             });
         }
 
-        for (path, title, modified) in entries {
+        for (path, title, modified) in &entries {
             let row = ListBoxRow::new();
             let row_box = GBox::new(Orientation::Vertical, 2);
             row_box.set_margin_top(8);
@@ -126,11 +127,11 @@ impl LaunchWindow {
             row_box.set_margin_start(12);
             row_box.set_margin_end(12);
 
-            let title_lbl = Label::new(Some(&title));
+            let title_lbl = Label::new(Some(title));
             title_lbl.set_halign(Align::Start);
             title_lbl.add_css_class("body");
 
-            let date_lbl = Label::new(Some(&modified));
+            let date_lbl = Label::new(Some(modified));
             date_lbl.set_halign(Align::Start);
             date_lbl.add_css_class("dim-label");
             date_lbl.add_css_class("caption");
@@ -139,23 +140,36 @@ impl LaunchWindow {
             row_box.append(&date_lbl);
             row.set_child(Some(&row_box));
             list.append(&row);
+        }
 
-            // Wire row click → open document.
-            let path_c   = path.clone();
-            let app_c    = app.clone();
-            let win_ref  = window.clone();
-            row.connect_activate(move |_| {
+        // Single connect_row_activated on the ListBox — more reliable than per-row.
+        {
+            let paths: Vec<PathBuf> = entries.iter().map(|(p, _, _)| p.clone()).collect();
+            let app_c   = app.clone();
+            let win_ref = window.clone();
+            list.connect_row_activated(move |_, row| {
+                let idx = row.index() as usize;
+                if idx >= paths.len() { return; }
+                let path = paths[idx].clone();
                 use folio_core::format::load_folio;
-                match load_folio(&path_c) {
+                match load_folio(&path) {
                     Ok((engine, doc, _)) => {
                         let canvas = crate::canvas::EditorCanvas::from_loaded(
-                            doc, path_c.clone(), engine,
+                            doc, path, engine,
                         );
                         let dw = crate::window::DocumentWindow::from_canvas(&app_c, canvas);
                         dw.present();
                         win_ref.close();
                     }
-                    Err(e) => eprintln!("Failed to open document: {e}"),
+                    Err(e) => {
+                        let alert = libadwaita::AlertDialog::builder()
+                            .heading("Could not open document")
+                            .body(&e.to_string())
+                            .build();
+                        alert.add_response("ok", "OK");
+                        alert.set_default_response(Some("ok"));
+                        alert.present(Some(&win_ref));
+                    }
                 }
             });
         }
