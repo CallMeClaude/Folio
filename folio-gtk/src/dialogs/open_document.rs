@@ -28,8 +28,12 @@ pub fn show(app: &Application, parent: &ApplicationWindow) {
             Ok(file) => {
                 let Some(path) = file.path() else { return };
                 match load_folio(&path) {
-                    Ok((doc, _assets)) => {
-                        let win = DocumentWindow::new(&app_ref, doc);
+                    Ok((engine, doc, _assets)) => {
+                        use std::path::PathBuf;
+                        let canvas = crate::canvas::EditorCanvas::from_loaded(
+                            doc.clone(), PathBuf::from(&path), engine
+                        );
+                        let win = DocumentWindow::from_canvas(&app_ref, canvas);
                         win.present();
                     }
                     Err(e) => {

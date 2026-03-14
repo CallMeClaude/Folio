@@ -1,38 +1,55 @@
-/// .folio bundle format — a ZIP archive containing:
-///   document.json   — the serialized Document
-///   assets/         — embedded images (UUID filename, original extension)
-///
-/// This is structurally identical to how .pages works.
+//! .folio bundle format — a ZIP archive containing:
+//!
+//!   document.json   — metadata only (title, subtitle, paper size, margins,
+//!                     orientation, created/modified timestamps, typography).
+//!                     The block tree lives in content.loro.
+//!   content.loro    — loro binary snapshot (block tree + full edit history)
+//!   assets/         — embedded images as original files, keyed by UUID
+//!
+//! This mirrors how .pages works: the ZIP *is* the document.
+
 use std::io::{Read, Write};
 use std::path::Path;
 use anyhow::{Context, Result};
 use uuid::Uuid;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
+use crate::crdt::CrdtEngine;
 use crate::document::Document;
 use crate::format::json;
 
-const DOCUMENT_JSON: &str = "document.json";
-const ASSETS_DIR:    &str = "assets/";
+const META_JSON:   &str = "document.json";
+const LORO_BLOB:   &str = "content.loro";
+const ASSETS_DIR:  &str = "assets/";
 
-/// Write a Document to a .folio file at `path`.
-/// Any asset blobs should be passed as `assets`: Vec<(Uuid, extension, bytes)>.
+// ── Save ─────────────────────────────────────────────────────────────────────
+
+/// Write a .folio bundle.
+///
+/// `engine` is used to export the loro snapshot (content.loro).
+/// `assets` is a list of (uuid, extension, raw_bytes) for any embedded images.
 pub fn save_folio(
-    path: &Path,
-    doc:  &Document,
+    path:   &Path,
+    doc:    &Document,
+    engine: &CrdtEngine,
     assets: &[(Uuid, String, Vec<u8>)],
 ) -> Result<()> {
     let file = std::fs::File::create(path)
-        .with_context(|| format!("Cannot create {}", path.display()))?;
-    let mut zip = ZipWriter::new(file);
-    let opts = SimpleFileOptions::default()
+        .with_context(|| format!("cannot create {}", path.display()))?;
+    let mut zip  = ZipWriter::new(file);
+    let     opts = SimpleFileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated);
 
-    // Write document.json
-    let json_str = json::to_json(doc)?;
-    zip.start_file(DOCUMENT_JSON, opts)?;
-    zip.write_all(json_str.as_bytes())?;
+    // 1. Metadata JSON (no block tree)
+    let meta_json = json::to_metadata_json(doc)?;
+    zip.start_file(META_JSON, opts)?;
+    zip.write_all(meta_json.as_bytes())?;
 
-    // Write each asset
+    // 2. Loro snapshot (contains the full block tree + history)
+    let loro_bytes = engine.export_snapshot()?;
+    zip.start_file(LORO_BLOB, opts)?;
+    zip.write_all(&loro_bytes)?;
+
+    // 3. Assets
     for (id, ext, bytes) in assets {
         let name = format!("{}{}.{}", ASSETS_DIR, id, ext);
         zip.start_file(&name, opts)?;
@@ -43,23 +60,35 @@ pub fn save_folio(
     Ok(())
 }
 
-/// Read a Document from a .folio file at `path`.
-/// Returns (Document, asset_map) where asset_map maps Uuid → raw bytes.
+// ── Load ─────────────────────────────────────────────────────────────────────
+
+/// Read a .folio bundle.
+///
+/// Returns `(engine, document, asset_map)` where:
+/// - `engine`    is restored from the loro snapshot
+/// - `document`  is the full Document rebuilt from the loro state
+/// - `asset_map` maps Uuid → raw image bytes
 pub fn load_folio(
     path: &Path,
-) -> Result<(Document, std::collections::HashMap<Uuid, Vec<u8>>)> {
+) -> Result<(CrdtEngine, Document, std::collections::HashMap<Uuid, Vec<u8>>)> {
     let file = std::fs::File::open(path)
-        .with_context(|| format!("Cannot open {}", path.display()))?;
+        .with_context(|| format!("cannot open {}", path.display()))?;
     let mut zip = ZipArchive::new(file)?;
-    // Read document.json
-    let mut json_file = zip.by_name(DOCUMENT_JSON)
-        .context("document.json missing from .folio bundle")?;
-    let mut json_str = String::new();
-    json_file.read_to_string(&mut json_str)?;
-    drop(json_file);
-    let doc = json::from_json(&json_str)?;
 
-    // Read all assets
+    // 1. Read loro snapshot
+    let loro_bytes = {
+        let mut entry = zip.by_name(LORO_BLOB)
+            .context("content.loro missing from .folio bundle")?;
+        let mut buf = Vec::new();
+        entry.read_to_end(&mut buf)?;
+        buf
+    };
+
+    // 2. Restore engine + document from loro snapshot
+    let (mut engine, document) = CrdtEngine::import_snapshot(&loro_bytes)?;
+    engine.clear_history();
+
+    // 3. Assets
     let mut assets = std::collections::HashMap::new();
     let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
     for name in names {
@@ -77,5 +106,5 @@ pub fn load_folio(
         }
     }
 
-    Ok((doc, assets))
+    Ok((engine, document, assets))
 }

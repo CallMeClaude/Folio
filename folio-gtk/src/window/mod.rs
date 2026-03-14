@@ -12,7 +12,14 @@ pub struct DocumentWindow {
 }
 
 impl DocumentWindow {
+    /// Open a brand-new (unsaved) document.
     pub fn new(app: &Application, doc: Document) -> Self {
+        Self::from_canvas(app, EditorCanvas::new(doc))
+    }
+
+    /// Open a document that was already loaded from disk (with engine + path).
+    pub fn from_canvas(app: &Application, canvas: EditorCanvas) -> Self {
+        let doc   = canvas.state.borrow().doc.clone();
         let title = if doc.title.is_empty() { "Untitled".to_string() } else { doc.title.clone() };
 
         let window = ApplicationWindow::builder()
@@ -22,8 +29,7 @@ impl DocumentWindow {
             .default_height(860)
             .build();
 
-        // ── Canvas ─────────────────────────────────────────────────────────
-        let canvas = EditorCanvas::new(doc);
+        // canvas already constructed — just use it directly
 
         // ── Shared state refs for toolbar + sidebar ────────────────────────
         let state = canvas.state.clone();
