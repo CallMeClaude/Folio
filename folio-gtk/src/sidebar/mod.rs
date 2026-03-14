@@ -37,7 +37,7 @@ impl DocumentSidebar {
         stack.add_titled(&fmt.widget, Some("format"), "Format");
 
         // ── Outline panel ──────────────────────────────────────────────────
-        let outline = OutlinePanel::new(state.clone());
+        let outline = OutlinePanel::new(state.clone(), canvas.clone());
         stack.add_titled(&outline.widget, Some("outline"), "Outline");
 
         // ── Stats panel ────────────────────────────────────────────────────
