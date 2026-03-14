@@ -18,7 +18,19 @@ pub fn handle_key(
         gdk::Key::z | gdk::Key::Z if ctrl &&  shift => redo(s),
         gdk::Key::y | gdk::Key::Y if ctrl           => redo(s),
         gdk::Key::s | gdk::Key::S if ctrl           => { save(s); false }
-        gdk::Key::f | gdk::Key::F if ctrl           => { open_find(da); false }
+        gdk::Key::f | gdk::Key::F if ctrl && !shift => { open_find(da); false }
+        // Focus mode toggle: Ctrl+Shift+F
+        gdk::Key::f | gdk::Key::F if ctrl &&  shift => {
+            s.focus_mode = !s.focus_mode; true
+        }
+        // Typewriter mode toggle: Ctrl+Shift+T
+        gdk::Key::t | gdk::Key::T if ctrl &&  shift => {
+            s.typewriter_mode = !s.typewriter_mode; true
+        }
+        // Escape exits focus mode
+        gdk::Key::Escape if s.focus_mode => {
+            s.focus_mode = false; true
+        }
         gdk::Key::BackSpace                          => backspace(s),
         gdk::Key::Return | gdk::Key::KP_Enter        => enter(s),
         gdk::Key::Left  if shift => extend_selection(s, -1, false),

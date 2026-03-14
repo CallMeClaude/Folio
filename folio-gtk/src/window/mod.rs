@@ -1,10 +1,11 @@
 use gtk4::prelude::*;
 use libadwaita::prelude::*;
 use libadwaita::{Application, ApplicationWindow, HeaderBar, OverlaySplitView, ToolbarView};
-use gtk4::{Box as GBox, Button, FileDialog, FileFilter, ListStore,
-           Orientation, ScrolledWindow, Align, PolicyType,
-           ToggleButton, PackType};
+use gtk4::{Box as GBox, Button, Orientation, ScrolledWindow, Align,
+           PolicyType, ToggleButton, PackType};
+use glib;
 use gio;
+use std::time::Duration;
 use folio_core::Document;
 use crate::canvas::EditorCanvas;
 use crate::toolbar::FormattingToolbar;
@@ -82,7 +83,7 @@ impl DocumentWindow {
         }
         header.pack_start(&find_btn);
 
-        // Export button (menu)
+        // Export button
         let export_btn = Button::from_icon_name("document-save-as-symbolic");
         export_btn.set_tooltip_text(Some("Export document"));
         export_btn.add_css_class("flat");
@@ -95,6 +96,55 @@ impl DocumentWindow {
         }
         header.pack_start(&export_btn);
 
+        // Focus mode toggle
+        let focus_btn = ToggleButton::new();
+        focus_btn.set_icon_name("view-fullscreen-symbolic");
+        focus_btn.set_tooltip_text(Some("Focus Mode (Ctrl+Shift+F)"));
+        focus_btn.add_css_class("flat");
+        {
+            let s = state.clone();
+            let c = canvas.widget.clone();
+            let tb = toolbar.widget.clone();
+            let sp = split.clone();
+            focus_btn.connect_toggled(move |b| {
+                let active = b.is_active();
+                s.borrow_mut().focus_mode = active;
+                tb.set_visible(!active);
+                // Hide sidebar in focus mode
+                if active { sp.set_show_sidebar(false); }
+                c.queue_draw();
+            });
+        }
+        header.pack_end(&focus_btn);
+
+        // Typewriter mode toggle
+        let typo_btn = ToggleButton::new();
+        typo_btn.set_icon_name("format-text-direction-ltr-symbolic");
+        typo_btn.set_tooltip_text(Some("Typewriter Mode (Ctrl+Shift+T)"));
+        typo_btn.add_css_class("flat");
+        {
+            let s = state.clone();
+            typo_btn.connect_toggled(move |b| {
+                s.borrow_mut().typewriter_mode = b.is_active();
+            });
+        }
+        header.pack_end(&typo_btn);
+
+        // Dark mode toggle
+        let dark_btn = ToggleButton::new();
+        dark_btn.set_icon_name("weather-clear-night-symbolic");
+        dark_btn.set_tooltip_text(Some("Dark Mode"));
+        dark_btn.add_css_class("flat");
+        dark_btn.connect_toggled(|b| {
+            let mgr = libadwaita::StyleManager::default();
+            mgr.set_color_scheme(if b.is_active() {
+                libadwaita::ColorScheme::ForceDark
+            } else {
+                libadwaita::ColorScheme::PreferLight
+            });
+        });
+        header.pack_end(&dark_btn);
+
         let sidebar_btn = ToggleButton::new();
         sidebar_btn.set_icon_name("view-sidebar-end-symbolic");
         sidebar_btn.add_css_class("flat");
@@ -103,6 +153,22 @@ impl DocumentWindow {
         sidebar_btn.connect_toggled(move |b| split_ref.set_show_sidebar(b.is_active()));
         header.pack_end(&sidebar_btn);
 
+        // Preferences button
+        let prefs_btn = Button::from_icon_name("preferences-system-symbolic");
+        prefs_btn.set_tooltip_text(Some("Preferences"));
+        prefs_btn.add_css_class("flat");
+        {
+            let s = state.clone();
+            let c = canvas.widget.clone();
+            let w = window.clone();
+            prefs_btn.connect_clicked(move |_| {
+                crate::dialogs::preferences::show(
+                    w.upcast_ref::<gtk4::Window>(), s.clone(), c.clone()
+                );
+            });
+        }
+        header.pack_end(&prefs_btn);
+
         // ── Shell ──────────────────────────────────────────────────────────
         let tv = ToolbarView::new();
         tv.add_top_bar(&header);
@@ -110,6 +176,30 @@ impl DocumentWindow {
         tv.set_content(Some(&split));
 
         window.set_content(Some(&tv));
+
+        // Typewriter scroll: every 100ms, if typewriter_mode is on,
+        // scroll so the cursor block is vertically centred in the viewport.
+        {
+            let s  = state.clone();
+            let sc = scroll.clone();
+            glib::timeout_add_local(Duration::from_millis(100), move || {
+                let st = s.borrow();
+                if !st.typewriter_mode { return glib::ControlFlow::Continue; }
+                let cache_borrow = st.layout_cache.borrow();
+                if let Some(cache) = cache_borrow.as_ref() {
+                    let idx = st.cursor.block_idx;
+                    if let Some(cb) = cache.blocks.get(idx) {
+                        let block_mid   = (cb.y_top + cb.y_bot) / 2.0;
+                        let view_height = sc.height() as f64;
+                        let target      = (block_mid - view_height / 2.0).max(0.0);
+                        if let Some(vadj) = sc.vadjustment() {
+                            vadj.set_value(target);
+                        }
+                    }
+                }
+                glib::ControlFlow::Continue
+            });
+        }
 
         // Grab keyboard focus after the window is actually shown/mapped.
         {
@@ -144,9 +234,10 @@ fn show_export_dialog(parent: &gtk4::Window, doc: &folio_core::Document) {
     vbox.set_margin_end(16);
 
     let formats: &[(&str, &str, &str)] = &[
-        ("Plain Text (.txt)", "*.txt", "txt"),
-        ("Markdown (.md)",    "*.md",  "md"),
-        ("HTML (.html)",      "*.html","html"),
+        ("Plain Text (.txt)", "*.txt",  "txt"),
+        ("Markdown (.md)",    "*.md",   "md"),
+        ("HTML (.html)",      "*.html", "html"),
+        ("PDF (.pdf)",        "*.pdf",  "pdf"),
     ];
 
     for (label, _glob, fmt) in formats {
@@ -161,12 +252,14 @@ fn show_export_dialog(parent: &gtk4::Window, doc: &folio_core::Document) {
                 "txt"  => export_txt(&doc_clone).unwrap_or_default(),
                 "md"   => export_md(&doc_clone).unwrap_or_default(),
                 "html" => export_html(&doc_clone).unwrap_or_default(),
+                "pdf"  => { /* handled separately below */ String::new() }
                 _      => return,
             };
             let ext      = fmt_str.clone();
             let content2 = content.clone();
             let p2       = p_ref.clone();
             let d2       = d_ref.clone();
+            let dc3      = doc_clone.clone();
             glib::spawn_future_local(async move {
                 let filter = gtk4::FileFilter::new();
                 filter.add_pattern(&format!("*.{}", ext));
@@ -179,7 +272,11 @@ fn show_export_dialog(parent: &gtk4::Window, doc: &folio_core::Document) {
                     .build();
                 if let Ok(file) = fd.save_future(Some(&p2)).await {
                     if let Some(path) = file.path() {
-                        std::fs::write(&path, content2.as_bytes()).ok();
+                        if ext == "pdf" {
+                            folio_core::export::export_pdf(&dc3, &path).ok();
+                        } else {
+                            std::fs::write(&path, content2.as_bytes()).ok();
+                        }
                     }
                 }
                 d2.close();

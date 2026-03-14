@@ -8,6 +8,7 @@ use glib;
 use folio_core::{Document, DocPosition, CrdtEngine, InlineAttr};
 use crate::canvas::layout::LayoutCache;
 use crate::canvas::selection::SelectionState;
+use crate::canvas::cursor::CursorStyle;
 
 pub mod layout;
 pub mod render;
@@ -31,6 +32,12 @@ pub struct EditorState {
     /// When the user clicks Bold with no selection, this set gains Bold.
     /// Each typed character is inserted then has these attrs applied.
     pub pending_attrs:  Vec<InlineAttr>,
+    /// Focus mode — dims all but the active block, hides toolbar/sidebar.
+    pub focus_mode:     bool,
+    /// Typewriter mode — scrolls active block to vertical center after edits.
+    pub typewriter_mode: bool,
+    /// Cursor style (I-beam / block / underscore) — set in Preferences.
+    pub cursor_style:   CursorStyle,
     /// Layout cache — RefCell so render can rebuild it while holding &EditorState.
     pub layout_cache:   RefCell<Option<LayoutCache>>,
 }
@@ -46,8 +53,11 @@ impl EditorState {
             dirty:          false,
             selection:      None,
             drag_anchor:    None,
-            pending_attrs:  Vec::new(),
-            layout_cache:   RefCell::new(None),
+            pending_attrs:   Vec::new(),
+            focus_mode:      false,
+            typewriter_mode: false,
+            cursor_style:    CursorStyle::IBeam,
+            layout_cache:    RefCell::new(None),
         }
     }
 
@@ -110,10 +120,44 @@ impl EditorCanvas {
             click.connect_pressed(move |_, _n, x, y| {
                 d.grab_focus();
                 let mut st = s.borrow_mut();
+
+                // Check if clicking a checklist checkbox (area left of content_x).
+                // Extract the info we need from the cache first, before any mutation.
+                let checkbox_click: Option<(usize, bool)> = {
+                    let cache_borrow = st.layout_cache.borrow();
+                    cache_borrow.as_ref().and_then(|cache| {
+                        let cx = cache.geo.content_x();
+                        if x >= cx - 24.0 && x <= cx - 6.0 {
+                            for (i, cb) in cache.blocks.iter().enumerate() {
+                                if y >= cb.y_top && y <= cb.y_bot {
+                                    if let folio_core::BlockKind::CheckItem { checked } =
+                                        &st.doc.blocks[i].kind
+                                    {
+                                        return Some((i, !checked));
+                                    }
+                                }
+                            }
+                        }
+                        None
+                    })
+                };
+
+                if let Some((block_idx, new_checked)) = checkbox_click {
+                    let snap = st.doc.clone();
+                    st.engine.checkpoint(&snap).ok();
+                    st.doc.blocks[block_idx].kind =
+                        folio_core::BlockKind::CheckItem { checked: new_checked };
+                    st.dirty = true;
+                    st.invalidate_layout();
+                    drop(st);
+                    d.queue_draw();
+                    return;
+                }
+
                 if let Some(pos) = hittest::xy_to_position(&st, x, y) {
-                    st.cursor      = pos;
-                    st.selection   = None;
-                    st.drag_anchor = Some(pos);
+                    st.cursor         = pos;
+                    st.selection      = None;
+                    st.drag_anchor    = Some(pos);
                     st.cursor_visible = true;
                     st.invalidate_layout();
                 }

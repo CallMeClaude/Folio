@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Folio
+GenericName=Word Processor
+Comment=A beautiful word processor for Linux
+Exec=folio %f
+Icon=org.folio.Folio
+Categories=Office;WordProcessor;
+MimeType=application/x-folio;
+StartupNotify=true
+StartupWMClass=folio
+Keywords=text;document;write;editor;word;
