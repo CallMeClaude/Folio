@@ -16,3 +16,4 @@ pub use document::{
     EditError,
 };
 pub use crdt::CrdtEngine;
+pub use format::{save_folio, load_folio, read_folio_metadata};

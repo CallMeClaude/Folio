@@ -108,3 +108,18 @@ pub fn load_folio(
 
     Ok((engine, document, assets))
 }
+
+// ── Quick metadata read (for launch screen listing) ──────────────────────────
+
+/// Read only the document metadata from a .folio bundle — much cheaper than
+/// loading the full loro snapshot. Used by the launch screen to list files.
+pub fn read_folio_metadata(path: &Path) -> Result<crate::format::json::DocumentMetadata> {
+    let file = std::fs::File::open(path)
+        .with_context(|| format!("cannot open {}", path.display()))?;
+    let mut zip = ZipArchive::new(file)?;
+    let mut entry = zip.by_name(META_JSON)
+        .context("document.json missing from .folio bundle")?;
+    let mut s = String::new();
+    entry.read_to_string(&mut s)?;
+    Ok(serde_json::from_str(&s)?)
+}

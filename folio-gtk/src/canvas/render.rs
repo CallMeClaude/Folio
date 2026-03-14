@@ -1,89 +1,85 @@
-use cairo::Context;
-use folio_core::{Block, BlockKind};
-use crate::canvas::EditorState;
+//! Cairo paint pass.
+//!
+//! On each draw call:
+//!   1. Ensure the LayoutCache is valid (recompute if None).
+//!   2. Paint canvas background + page shadow + white page.
+//!   3. Paint selection highlights (behind text).
+//!   4. Paint text for each block.
+//!   5. Paint the cursor.
 
-// A4 at 96 DPI (pixels).
-const PAGE_W: f64 = 793.7;
-const PAGE_H: f64 = 1122.5;
-const PAD:    f64 = 40.0;   // gap between window edge and page
-const MARGIN: f64 = 96.0;   // 25.4 mm at 96 DPI
+use cairo::Context;
+use folio_core::BlockKind;
+use crate::canvas::EditorState;
+use crate::canvas::layout::{
+    LayoutCache, CONTENT_X, CONTENT_Y, PAGE_PAD, PAGE_W, PAGE_H,
+};
+use crate::canvas::selection::paint_selection_for_block;
 
 pub fn draw(cr: &Context, state: &EditorState) {
-    // ── Canvas background ──────────────────────────────────────────────────
+    // ── Ensure layout cache is valid ──────────────────────────────────────
+    {
+        let mut cache = state.layout_cache.borrow_mut();
+        if cache.is_none() {
+            let pctx = pangocairo::functions::create_context(cr);
+            *cache = Some(LayoutCache::build(&state.doc, &pctx));
+        }
+    }
+
+    // ── Canvas background ─────────────────────────────────────────────────
     cr.set_source_rgb(0.925, 0.922, 0.918);
     cr.paint().ok();
 
-    // ── Page drop-shadow ───────────────────────────────────────────────────
+    // ── Page drop-shadow ──────────────────────────────────────────────────
     cr.set_source_rgba(0.0, 0.0, 0.0, 0.10);
-    cr.rectangle(PAD + 3.0, PAD + 3.0, PAGE_W, PAGE_H);
+    cr.rectangle(PAGE_PAD + 3.0, PAGE_PAD + 3.0, PAGE_W, PAGE_H);
     cr.fill().ok();
 
-    // ── White page ─────────────────────────────────────────────────────────
+    // ── White page ────────────────────────────────────────────────────────
     cr.set_source_rgb(1.0, 1.0, 1.0);
-    cr.rectangle(PAD, PAD, PAGE_W, PAGE_H);
+    cr.rectangle(PAGE_PAD, PAGE_PAD, PAGE_W, PAGE_H);
     cr.fill().ok();
 
-    // ── Content ────────────────────────────────────────────────────────────
-    cr.save().ok();
-    cr.translate(PAD + MARGIN, PAD + MARGIN);
-    draw_content(cr, state, PAGE_W - MARGIN * 2.0);
-    cr.restore().ok();
-}
+    let cache_ref = state.layout_cache.borrow();
+    let cache = match cache_ref.as_ref() {
+        Some(c) => c,
+        None    => return,
+    };
 
-fn draw_content(cr: &Context, state: &EditorState, content_w: f64) {
-    let pctx = pangocairo::functions::create_context(cr);
-    let size  = state.doc.typography.font_size_pt as i32;
-    let font  = pango::FontDescription::from_string(&format!("Lora {}", size));
-
-    let mut y = 0.0_f64;
-    for (idx, block) in state.doc.blocks.iter().enumerate() {
-        let layout = make_layout(&pctx, &font, block, content_w);
-
-        cr.set_source_rgb(0.11, 0.11, 0.11);
-        cr.move_to(0.0, y);
-        pangocairo::functions::show_layout(cr, &layout);
-
-        if idx == state.cursor.block_idx && state.cursor_visible {
-            paint_cursor(cr, &layout, state.cursor.byte_offset, y);
+    // ── Selection highlights (drawn before text) ──────────────────────────
+    if let Some(sel_state) = &state.selection {
+        if !sel_state.is_collapsed() {
+            let range = sel_state.to_range();
+            for (i, cb) in cache.blocks.iter().enumerate() {
+                paint_selection_for_block(cr, i, &range, cb);
+            }
         }
-
-        let (_, h) = layout.pixel_size();
-        y += h as f64 + block_gap(&block.kind);
     }
-}
 
-fn make_layout(
-    ctx:   &pango::Context,
-    font:  &pango::FontDescription,
-    block: &Block,
-    width: f64,
-) -> pango::Layout {
-    let l = pango::Layout::new(ctx);
-    l.set_font_description(Some(font));
-    l.set_width((width * pango::SCALE as f64) as i32);
-    l.set_wrap(pango::WrapMode::WordChar);
-    l.set_text(&block.plain_text());
-    l
+    // ── Text ──────────────────────────────────────────────────────────────
+    cr.set_source_rgb(0.11, 0.11, 0.11);
+    for (i, cb) in cache.blocks.iter().enumerate() {
+        cr.move_to(CONTENT_X, cb.y_top);
+        pangocairo::functions::show_layout(cr, &cb.layout);
+
+        // Cursor
+        if i == state.cursor.block_idx && state.cursor_visible
+            && state.selection.as_ref().map(|s| s.is_collapsed()).unwrap_or(true)
+        {
+            paint_cursor(cr, &cb.layout, state.cursor.byte_offset, cb.y_top);
+        }
+    }
 }
 
 fn paint_cursor(cr: &Context, layout: &pango::Layout, byte_off: usize, block_y: f64) {
     let (strong, _) = layout.cursor_pos(byte_off as i32);
-    let s = pango::SCALE as f64;
-    let x = strong.x() as f64 / s;
-    let y = block_y + strong.y() as f64 / s;
-    let h = strong.height() as f64 / s;
+    let ps = pango::SCALE as f64;
+    let x  = CONTENT_X + strong.x()      as f64 / ps;
+    let y  = block_y   + strong.y()      as f64 / ps;
+    let h  =             strong.height() as f64 / ps;
 
-    cr.set_source_rgb(0.106, 0.431, 0.929); // Adwaita accent blue
+    cr.set_source_rgb(0.106, 0.431, 0.929);
     cr.set_line_width(1.5);
     cr.move_to(x, y);
     cr.line_to(x, y + h);
     cr.stroke().ok();
-}
-
-fn block_gap(kind: &BlockKind) -> f64 {
-    match kind {
-        BlockKind::Title | BlockKind::Heading1 => 14.0,
-        BlockKind::Heading2                    => 10.0,
-        _                                      =>  6.0,
-    }
 }
